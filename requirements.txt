@@ -1,7 +1,7 @@
 numpy
 sounddevice
-keyboard
-vosk 
 pywin32
+pynput
+vosk
 pyqt5
 ruff

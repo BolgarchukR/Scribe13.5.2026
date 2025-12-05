@@ -146,8 +146,8 @@ class Application(QObject):
 
             # 1. Destroy the HotkeyManager first, as it holds a strong reference to the controller.
             if self.hotkey_manager:
-                logger.debug("Clearing and deleting old HotkeyManager.")
-                self.hotkey_manager.clear()
+                logger.debug("Stopping and deleting old HotkeyManager.")
+                self.hotkey_manager.stop()
                 self.hotkey_manager.deleteLater()
                 self.hotkey_manager = None
 
