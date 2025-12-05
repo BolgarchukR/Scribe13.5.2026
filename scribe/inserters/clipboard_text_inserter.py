@@ -1,16 +1,15 @@
-# inserters/clipboard_text_inserter.py
+# inserters/linux_clipboard_text_inserter.py
 import logging
 import queue
 import threading
 import time
-
-import win32api
-import win32clipboard
-import win32con
+import copykitten
+from pynput.keyboard import Controller, Key
 
 from scribe.inserters.text_inserter import TextInserter
 
 logger = logging.getLogger(__name__)
+
 
 class ClipboardTextInserter(TextInserter):
     def __init__(self, settings_manager):
@@ -19,6 +18,7 @@ class ClipboardTextInserter(TextInserter):
         self._queue = queue.Queue()
         self._worker = threading.Thread(target=self._worker_loop, daemon=True)
         self._running = False
+        self._keyboard = Controller()
         self._update_settings(self.settings_manager.all())
         self.settings_manager.settings_changed.connect(self._update_settings)
 
@@ -28,15 +28,9 @@ class ClipboardTextInserter(TextInserter):
 
     def start(self):
         try:
-            win32clipboard.OpenClipboard()
-            try:
-                orig = win32clipboard.GetClipboardData(win32con.CF_UNICODETEXT)
-            except Exception:
-                orig = None
-            win32clipboard.CloseClipboard()
-            self._orig_clipboard = orig
-            if orig is not None:
-                snippet = orig[:50] + ("..." if len(orig) > 50 else "")
+            self._orig_clipboard = copykitten.paste()
+            if self._orig_clipboard is not None:
+                snippet = self._orig_clipboard[:50] + ("..." if len(self._orig_clipboard) > 50 else "")
                 logger.info(f"Original buffer saved (start): '{snippet}'")
             else:
                 logger.info("The original buffer is empty or not text")
@@ -70,46 +64,35 @@ class ClipboardTextInserter(TextInserter):
                 if cmd == '__STOP__':
                     break
                 if cmd == 'insert_text':
-                    # Сохраняем и вставляем через буфер обмена
-                    win32clipboard.OpenClipboard()
-                    win32clipboard.EmptyClipboard()
-                    win32clipboard.SetClipboardData(win32con.CF_UNICODETEXT, arg)
-                    win32clipboard.CloseClipboard()
-                    win32api.keybd_event(0x11, 0, 0, 0)  # Ctrl
-                    win32api.keybd_event(0x56, 0, 0, 0)  # V
-                    win32api.keybd_event(0x56, 0, 2, 0)  # V up
-                    win32api.keybd_event(0x11, 0, 2, 0)  # Ctrl up
+                    copykitten.copy(arg)
+                    with self._keyboard.pressed(Key.ctrl):
+                        self._keyboard.press('v')
+                        self._keyboard.release('v')
                     time.sleep(self.clipboard_delay * len(arg))
                 elif cmd == 'insert_actions':
-                    # Собираем итоговый текст с учётом спецклавиш
                     buf = ''
                     for action in arg:
                         if action['type'] == 'text' and action['value']:
                             buf += action['value']
                         elif action['type'] == 'key' and action['value']:
                             key = action['value']
-                            if key == 'Space':
+                            if key.lower() == 'space':
                                 buf += ' '
-                            elif key == 'Tab':
+                            elif key.lower() == 'tab':
                                 buf += '\t'
-                            elif key == 'Enter':
+                            elif key.lower() == 'enter':
                                 buf += '\n'
-                            elif key == 'Backspace':
+                            elif key.lower() == 'backspace':
                                 buf = buf[:-1] if buf else buf
-                    # Вставляем итоговый буфер через буфер обмена
-                    win32clipboard.OpenClipboard()
-                    win32clipboard.EmptyClipboard()
-                    win32clipboard.SetClipboardData(win32con.CF_UNICODETEXT, buf)
-                    win32clipboard.CloseClipboard()
-                    win32api.keybd_event(0x11, 0, 0, 0)  # Ctrl
-                    win32api.keybd_event(0x56, 0, 0, 0)  # V
-                    win32api.keybd_event(0x56, 0, 2, 0)  # V up
-                    win32api.keybd_event(0x11, 0, 2, 0)  # Ctrl up
+                    copykitten.copy(buf)
+                    with self._keyboard.pressed(Key.ctrl):
+                        self._keyboard.press('v')
+                        self._keyboard.release('v')
                     time.sleep(self.clipboard_delay * len(buf))
                 elif cmd == 'erase_chars':
                     for _ in range(arg):
-                        win32api.keybd_event(0x08, 0, 0, 0)  # Backspace
-                        win32api.keybd_event(0x08, 0, 2, 0)
+                        self._keyboard.press(Key.backspace)
+                        self._keyboard.release(Key.backspace)
                         time.sleep(0.01)
             except Exception as e:
                 logger.error(f"{e}")

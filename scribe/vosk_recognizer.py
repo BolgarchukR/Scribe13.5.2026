@@ -91,33 +91,14 @@ class VoskRecognizer(QObject):
         self.final_handler = final_handler  # callback for final text
         self.partial_handler = partial_handler  # callback for partial (optional)
         # Text inserter. Available options: 'clipboard', 'keyboard'
-        # Temporarily commenting out Windows-specific inserters to test Linux/cross-platform implementation.
-        # if sys.platform == 'win32':
-        #     if inserter_type == 'clipboard':
-        #         from scribe.inserters.clipboard_text_inserter import ClipboardTextInserter
-        #         self.inserter = ClipboardTextInserter(self.settings_manager)
-        #     elif inserter_type == 'keyboard':
-        #         from scribe.inserters.keyboard_text_inserter import KeyboardTextInserter
-        #         self.inserter = KeyboardTextInserter(self.settings_manager)
-        #     else:
-        #         logger.warning(f"Unknown inserter_type '{inserter_type}' for Windows, using ClipboardTextInserter")
-        #         from scribe.inserters.clipboard_text_inserter import ClipboardTextInserter
-        #         self.inserter = ClipboardTextInserter(self.settings_manager)
-        # elif sys.platform == 'linux':
-        if sys.platform == 'linux' or sys.platform == 'win32' or sys.platform == 'darwin': # Using Linux inserters on all supported platforms for testing
-            if inserter_type == 'clipboard':
-                from scribe.inserters.linux_clipboard_text_inserter import LinuxClipboardTextInserter
-                self.inserter = LinuxClipboardTextInserter(self.settings_manager)
-            elif inserter_type == 'keyboard':
-                from scribe.inserters.linux_keyboard_text_inserter import LinuxKeyboardTextInserter
-                self.inserter = LinuxKeyboardTextInserter(self.settings_manager)
-            else:
-                logger.warning(f"Unknown inserter_type '{inserter_type}', using LinuxClipboardTextInserter as fallback.")
-                from scribe.inserters.linux_clipboard_text_inserter import LinuxClipboardTextInserter
-                self.inserter = LinuxClipboardTextInserter(self.settings_manager)
+        if inserter_type == 'clipboard':
+            from scribe.inserters.clipboard_text_inserter import ClipboardTextInserter
+            self.inserter = ClipboardTextInserter(self.settings_manager)
+        elif inserter_type == 'keyboard':
+            from scribe.inserters.keyboard_text_inserter import KeyboardTextInserter
+            self.inserter = KeyboardTextInserter(self.settings_manager)
         else:
-            logger.warning(f"Unsupported platform '{sys.platform}', using generic ClipboardTextInserter fallback.")
-            # Fallback for other platforms or if platform is not explicitly handled
+            logger.warning(f"Unknown inserter_type '{inserter_type}', using ClipboardTextInserter")
             from scribe.inserters.clipboard_text_inserter import ClipboardTextInserter
             self.inserter = ClipboardTextInserter(self.settings_manager)
 
@@ -480,33 +461,14 @@ class VoskRecognizer(QObject):
         if was_running:
             self.inserter.stop()
         self.settings_manager = self.settings_manager  # just in case
-        # Temporarily commenting out Windows-specific inserters to test Linux/cross-platform implementation.
-        # if sys.platform == 'win32':
-        #     if inserter_type == 'clipboard':
-        #         from scribe.inserters.clipboard_text_inserter import ClipboardTextInserter
-        #         self.inserter = ClipboardTextInserter(self.settings_manager)
-        #     elif inserter_type == 'keyboard':
-        #         from scribe.inserters.keyboard_text_inserter import KeyboardTextInserter
-        #         self.inserter = KeyboardTextInserter(self.settings_manager)
-        #     else:
-        #         logger.warning(f"Unknown inserter_type '{inserter_type}' for Windows, using ClipboardTextInserter")
-        #         from scribe.inserters.clipboard_text_inserter import ClipboardTextInserter
-        #         self.inserter = ClipboardTextInserter(self.settings_manager)
-        # elif sys.platform == 'linux':
-        if sys.platform == 'linux' or sys.platform == 'win32' or sys.platform == 'darwin': # Using Linux inserters on all supported platforms for testing
-            if inserter_type == 'clipboard':
-                from scribe.inserters.linux_clipboard_text_inserter import LinuxClipboardTextInserter
-                self.inserter = LinuxClipboardTextInserter(self.settings_manager)
-            elif inserter_type == 'keyboard':
-                from scribe.inserters.linux_keyboard_text_inserter import LinuxKeyboardTextInserter
-                self.inserter = LinuxKeyboardTextInserter(self.settings_manager)
-            else:
-                logger.warning(f"Unknown inserter_type '{inserter_type}', using LinuxClipboardTextInserter as fallback.")
-                from scribe.inserters.linux_clipboard_text_inserter import LinuxClipboardTextInserter
-                self.inserter = LinuxClipboardTextInserter(self.settings_manager)
+        if inserter_type == 'clipboard':
+            from scribe.inserters.clipboard_text_inserter import ClipboardTextInserter
+            self.inserter = ClipboardTextInserter(self.settings_manager)
+        elif inserter_type == 'keyboard':
+            from scribe.inserters.keyboard_text_inserter import KeyboardTextInserter
+            self.inserter = KeyboardTextInserter(self.settings_manager)
         else:
-            logger.warning(f"Unsupported platform '{sys.platform}', using generic ClipboardTextInserter fallback.")
-            # Fallback for other platforms or if platform is not explicitly handled
+            logger.warning(f"Unknown inserter_type '{inserter_type}', using ClipboardTextInserter")
             from scribe.inserters.clipboard_text_inserter import ClipboardTextInserter
             self.inserter = ClipboardTextInserter(self.settings_manager)
         if was_running:

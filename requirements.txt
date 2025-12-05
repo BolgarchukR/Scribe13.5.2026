@@ -1,6 +1,5 @@
 numpy
 sounddevice
-pywin32
 pynput
 vosk
 pyqt5

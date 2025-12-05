@@ -1,14 +1,14 @@
-# inserters/keyboard_text_inserter.py
+# inserters/linux_keyboard_text_inserter.py
 import logging
 import queue
 import threading
 import time
-
-import keyboard
+from pynput.keyboard import Controller, Key
 
 from scribe.inserters.text_inserter import TextInserter
 
 logger = logging.getLogger(__name__)
+
 
 class KeyboardTextInserter(TextInserter):
     def __init__(self, settings_manager):
@@ -16,6 +16,7 @@ class KeyboardTextInserter(TextInserter):
         self._queue = queue.Queue()
         self._worker = threading.Thread(target=self._worker_loop, daemon=True)
         self._running = False
+        self._keyboard = Controller()
         self._update_settings(self.settings_manager.all())
         self.settings_manager.settings_changed.connect(self._update_settings)
 
@@ -39,7 +40,6 @@ class KeyboardTextInserter(TextInserter):
         if self._worker.is_alive():
             self._worker.join(timeout=1)
 
-
     def insert_text(self, text: str):
         logger.info(f"insert_text() called with text: {text!r}")
         self._queue.put(('insert_text', text))
@@ -59,23 +59,43 @@ class KeyboardTextInserter(TextInserter):
                 if cmd == '__STOP__':
                     break
                 if cmd == 'insert_text':
-                    keyboard.write(arg, delay=self.key_delay)
+                    # Type character by character with delay, mimicking keyboard.write(delay=...)
+                    for char in arg:
+                        self._keyboard.press(char)
+                        self._keyboard.release(char)
+                        time.sleep(self.key_delay)
                     time.sleep(self.after_text_delay * len(arg))
                 elif cmd == 'insert_actions':
-                    # Выполняем действия строго в том порядке, в котором они были переданы
                     for action in arg:
                         if action['type'] == 'text' and action['value']:
-                            keyboard.write(action['value'], delay=self.key_delay)
+                            # Type character by character with delay
+                            for char in action['value']:
+                                self._keyboard.press(char)
+                                self._keyboard.release(char)
+                                time.sleep(self.key_delay)
                             time.sleep(self.after_text_delay * len(action['value']))
                         elif action['type'] == 'key' and action['value']:
-                            keyboard.send(action['value'])
-                            time.sleep(self.key_delay)
+                            key_to_press = self._map_key(action['value'])
+                            if key_to_press:
+                                self._keyboard.press(key_to_press)
+                                self._keyboard.release(key_to_press)
+                                time.sleep(self.key_delay)
                 elif cmd == 'erase_chars':
                     for _ in range(arg):
-                        keyboard.send('backspace')
+                        self._keyboard.press(Key.backspace)
+                        self._keyboard.release(Key.backspace)
                         time.sleep(self.backspace_delay)
             except Exception as e:
-                logger.error(f"{e}")
+                logger.error(f"Error in linux_keyboard_text_inserter worker loop: {e}")
+
+    def _map_key(self, key_name):
+        key_map = {
+            'backspace': Key.backspace,
+            'tab': Key.tab,
+            'enter': Key.enter,
+            'space': Key.space,
+        }
+        return key_map.get(key_name.lower())
 
     def wait_until_idle(self, timeout=2.0):
         """Waits until the command queue and worker thread are completely empty."""
