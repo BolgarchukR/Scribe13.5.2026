@@ -5,3 +5,4 @@ pynput
 vosk
 pyqt5
 ruff
+copykitten
