@@ -1,5 +1,6 @@
 # ui/main_voice_window.py
 import logging
+import sys
 
 from PyQt5.QtCore import QPoint, QSize, Qt
 from PyQt5.QtGui import QColor, QIcon, QPainter
@@ -552,11 +553,19 @@ class MainVoiceWindow(QWidget):
         self.close()
 
     def closeEvent(self, event):
-        """Handles window close event according to settings."""
+        """Handles window close event according to settings and OS."""
         if self._is_programmatic_close:
             event.accept()
             return
 
+        # On Linux, always minimize to the taskbar instead of hiding,
+        # as the tray icon might not be visible.
+        if sys.platform.startswith('linux'):
+            event.ignore()
+            self.showMinimized()
+            return
+
+        # Standard behavior for Windows/macOS
         if hasattr(self, '_close_behavior'):
             if self._close_behavior == 'tray':
                 # Save window position before hiding
@@ -571,7 +580,7 @@ class MainVoiceWindow(QWidget):
                 self.tray_app.exit_app()
                 event.accept()
         else:
-            # Default behavior if _close_behavior is not set (e.g., on first run)
+            # Default behavior if _close_behavior is not set
             event.accept()
 
     def showEvent(self, event):

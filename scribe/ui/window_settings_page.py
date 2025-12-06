@@ -1,4 +1,5 @@
 # ui/window_settings_page.py
+import sys
 from PyQt5.QtWidgets import QButtonGroup, QCheckBox, QGroupBox, QHBoxLayout, QLabel, QRadioButton, QVBoxLayout, QWidget
 
 from .styles import HINT_LABEL_STYLE
@@ -56,6 +57,10 @@ class WindowSettingsPageWidget(QWidget):
         close_behavior_layout.addWidget(restart_hint_label)
 
         layout.addWidget(self.close_behavior_group)
+
+        # Hide the close behavior group on Linux, as it's not applicable
+        if sys.platform.startswith('linux'):
+            self.close_behavior_group.hide()
 
         # Window size settings group
         self.size_group = QGroupBox(self.texts.get('window_size_group', 'Window size'))
