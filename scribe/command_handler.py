@@ -1,96 +1,91 @@
 # command_handler.py
 import logging
-import os
-import subprocess
-
-import keyboard
+import json
+from pynput.keyboard import Controller, Key
 
 from scribe.text_utils import fuzzy_match, normalize_text
+from scribe.app_launcher import CrossPlatformAppLauncher
 
 logger = logging.getLogger(__name__)
 
 
 def command_mode(settings_manager, lang=None):
-    """Returns a handler for command mode.
+    """Returns a handler for command mode."""
+    launcher = CrossPlatformAppLauncher()
+    keyboard = Controller()
 
-    settings_manager — settings object
-    lang — command language (defaults to current from settings).
-    """
+    def send_hotkey(hotkey_str):
+        """Parses a hotkey string and sends it using pynput."""
+        try:
+            keys = hotkey_str.lower().split('+')
+            special_keys = {
+                'ctrl': Key.ctrl, 'alt': Key.alt, 'shift': Key.shift,
+                'win': Key.cmd, 'cmd': Key.cmd, 'super': Key.cmd,
+                'enter': Key.enter, 'tab': Key.tab, 'space': Key.space,
+                'backspace': Key.backspace, 'esc': Key.esc
+            }
+            
+            modifiers = [special_keys[k.strip()] for k in keys[:-1] if k.strip() in special_keys]
+            regular_key = keys[-1].strip()
+
+            for mod in modifiers:
+                keyboard.press(mod)
+            
+            # Check if the last key is a special key or a regular character
+            if regular_key in special_keys:
+                keyboard.press(special_keys[regular_key])
+                keyboard.release(special_keys[regular_key])
+            else:
+                keyboard.press(regular_key)
+                keyboard.release(regular_key)
+
+            for mod in reversed(modifiers):
+                keyboard.release(mod)
+
+            logger.info(f"[COMMAND] Simulated hotkey: {hotkey_str}")
+        except Exception as e:
+            logger.error(f"[COMMAND][ERROR] Failed to send hotkey '{hotkey_str}': {e}")
+
     def handler(text):
         settings = settings_manager.all() if hasattr(settings_manager, 'all') else {}
         lang_code = lang or settings.get('language', 'en')
         text_norm = normalize_text(text)
         logger.info(f"[COMMAND] Recognized text: '{text_norm}'")
+
         # 1. Check commands_hotkey
         fuzzy_threshold_hotkey = float(settings.get('fuzzy_match_hotkey', 90)) / 100.0
         hotkey_cmds = settings.get('commands_hotkey', {}).get(lang_code, [])
         for cmd in hotkey_cmds:
             trigger = normalize_text(cmd.get('trigger', ''))
             hotkey = cmd.get('hotkey', '').strip()
-            logger.debug(f"[COMMAND] Checking hotkey trigger: '{trigger}' ~ '{text_norm}'")
-            # First exact match, then fuzzy_match
             if trigger and (trigger == text_norm or fuzzy_match(trigger, text_norm, threshold=fuzzy_threshold_hotkey)):
                 if hotkey:
-                    logger.info(f"[COMMAND] Simulating hotkey: {hotkey}")
-                    try:
-                        keyboard.send(hotkey)
-                    except Exception as e:
-                        logger.error(f"[COMMAND][ERROR] Failed to send hotkey: {e}")
-                return  # Only execute the first match
+                    send_hotkey(hotkey)
+                return
+
         # 2. Check commands_openfile
-        fuzzy_threshold_openfile = float(
-            settings.get('fuzzy_match_openfile', 90)) / 100.0
+        fuzzy_threshold_openfile = float(settings.get('fuzzy_match_openfile', 90)) / 100.0
         openfile_cmds = settings.get('commands_openfile', {}).get(lang_code, [])
         for cmd in openfile_cmds:
             trigger = normalize_text(cmd.get('trigger', ''))
+            app_info_str = cmd.get('app_info', '').strip()
             path = cmd.get('path', '').strip()
             args = cmd.get('args', '').strip()
-            # Check for the 'is_uwp' flag, defaulting to False if not present
-            is_uwp = str(cmd.get('is_uwp', 'false')).lower() == 'true'
-
-            logger.debug(
-                f"[COMMAND] Checking openfile trigger: '{trigger}' ~ '{text_norm}'")
-            # First exact match, then fuzzy_match
+            
             if trigger and (trigger == text_norm or fuzzy_match(trigger, text_norm, threshold=fuzzy_threshold_openfile)):
-                # The launch logic now depends on whether it's a UWP app or a regular file.
-                if is_uwp:
-                    # For UWP/Shell apps, the 'args' field contains the shell URI.
-                    if args:
-                        logger.info(f"[COMMAND] Launching UWP/Shell app: {args}")
-                        try:
-                            # The launch method differs between Windows versions.
-                            if os.name == 'nt':
-                                import sys
-                                win_ver = sys.getwindowsversion()
+                try:
+                    # Prefer launching with rich app_info if available
+                    if app_info_str:
+                        app_info = json.loads(app_info_str)
+                        app_info['args'] = args
+                        launcher.launch(json.dumps(app_info))
+                    # Fallback to simple path for manually added entries
+                    elif path:
+                        # Create a minimal app_info for the launcher
+                        minimal_info = json.dumps({"path": path, "name": trigger, "args": args})
+                        launcher.launch(minimal_info)
+                except Exception as e:
+                    logger.error(f"[COMMAND][ERROR] Failed to launch '{trigger}': {e}")
+                return
 
-                                # For Win 10 (major version 10) and 11, explorer.exe is reliable.
-                                if win_ver.major >= 10:
-                                    logger.debug("Using 'explorer.exe' method for Windows 10/11.")
-                                    subprocess.Popen(['explorer.exe', args])
-                                # For Win 8.0 (6.2), os.startfile was confirmed to work.
-                                else:
-                                    logger.debug("Using 'os.startfile' method for Windows 8.0.")
-                                    os.startfile(args)
-                            else:
-                                logger.warning("[COMMAND][WARN] UWP launch attempted on non-Windows OS.")
-                        except Exception as e:
-                            logger.error(
-                                f"[COMMAND][ERROR] Failed to launch UWP/Shell app: {e}")
-                    else:
-                        logger.warning(
-                            f"[COMMAND][WARN] UWP app has no launch arguments: {trigger}")
-                elif path:
-                    # This is the original logic for standard executables.
-                    logger.info(f"[COMMAND] Launching file: {path} {args}")
-                    try:
-                        # If it's on Windows and no arguments — use os.startfile
-                        if os.name == 'nt' and not args:
-                            os.startfile(path)
-                        else:
-                            # For cross-platform or with-args, use Popen.
-                            subprocess.Popen([path] + args.split())
-                    except Exception as e:
-                        logger.error(
-                            f"[COMMAND][ERROR] Failed to launch file: {e}")
-                return  # Execute only the first match
     return handler

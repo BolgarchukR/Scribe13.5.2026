@@ -2,7 +2,7 @@
 import json
 import logging
 import os
-import subprocess
+import platform
 import sys
 
 from PyQt5.QtCore import QObject, Qt, QThread, pyqtSignal
@@ -27,67 +27,30 @@ from PyQt5.QtWidgets import (
 
 from .busy_dialog import BusyDialog
 from .table_settings import TableSettings
+from app_scanner import get_installed_apps
+
+logger = logging.getLogger(__name__)
 
 
 class ScanWorker(QObject):
     finished = pyqtSignal(object)  # Signal to emit results or exception
 
-    def __init__(self, command):
+    def __init__(self):
         super().__init__()
-        self.command = command
 
     def run(self):
         try:
-            if not self.command:
-                raise RuntimeError("UWP scan is only supported on Windows.")
-
-            startupinfo = subprocess.STARTUPINFO()
-            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-            startupinfo.wShowWindow = subprocess.SW_HIDE
-
-            process = subprocess.Popen(
-                ['powershell', '-ExecutionPolicy', 'Bypass', '-Command', self.command],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                startupinfo=startupinfo,
-                creationflags=subprocess.CREATE_NO_WINDOW
-            )
-            stdout_bytes, stderr_bytes = process.communicate()
-
-            stdout = stdout_bytes.decode('utf-8', errors='ignore')
-            stderr = stderr_bytes.decode('utf-8', errors='ignore')
-
-            if process.returncode != 0:
-                raise subprocess.CalledProcessError(process.returncode, self.command, output=stdout, stderr=stderr)
-
-            if not stdout or not stdout.strip():
-                apps_data = []
-            else:
-                import base64
-                apps_data = []
-                lines = stdout.strip().splitlines()
-                for line in lines:
-                    if not line.strip():
-                        continue
-                    parts = line.strip().split('\t', 1)
-                    if len(parts) == 2:
-                        try:
-                            name_b64, appid_b64 = parts
-                            name = base64.b64decode(name_b64).decode('utf-8')
-                            appid = base64.b64decode(appid_b64).decode('utf-8')
-                            apps_data.append({"name": name, "appid": appid})
-                        except (base64.B64DecodeError, UnicodeDecodeError) as e:
-                            logging.warning(f"Skipping malformed Base64 line from PowerShell: {line}. Error: {e}")
-
+            apps_data = get_installed_apps()
             self.finished.emit(apps_data)
-
+            self.finished.emit(apps_data)
         except Exception as e:
+            logger.error(f"Failed to scan for applications: {e}", exc_info=True)
             self.finished.emit(e)
 
 
-class UWPAppDialog(QDialog):
+class AppSelectionDialog(QDialog):
     CACHE_DIR = "cache"
-    CACHE_FILE = os.path.join(CACHE_DIR, "uwp_apps_cache.json")
+    CACHE_FILE = os.path.join(CACHE_DIR, "apps_cache.json")
 
     def __init__(self, parent=None, texts=None):
         super().__init__(parent)
@@ -98,8 +61,7 @@ class UWPAppDialog(QDialog):
         layout = QVBoxLayout(self)
 
         self.list_widget = QListWidget()
-        # Set a font known to have good Unicode support on Windows
-        font = QFont("Segoe UI", 9)
+        font = QFont("Segoe UI" if platform.system() == "Windows" else "Arial", 9)
         self.list_widget.setFont(font)
         self.list_widget.itemDoubleClicked.connect(self.accept)
         layout.addWidget(self.list_widget)
@@ -128,65 +90,27 @@ class UWPAppDialog(QDialog):
                 apps = json.load(f)
 
             if not apps:
-                return  # No warning, just show an empty list
+                return
 
-            for app_info in apps:
+            for app_info in sorted(apps, key=lambda x: x.get('name', '').lower()):
                 name = app_info.get("name")
-                appid = app_info.get("appid")
-                logging.debug(f"Adding to UWP list: Name='{name}'")
-                item = QListWidgetItem(name)  # No icon
-                item.setData(Qt.UserRole, appid)
+                item = QListWidgetItem(name)
+                # Store the entire app dictionary as a JSON string in the item's data
+                item.setData(Qt.UserRole, json.dumps(app_info))
                 self.list_widget.addItem(item)
 
         except (IOError, json.JSONDecodeError) as e:
-            logging.error(f"Failed to load UWP app cache: {e}")
-            # If cache is corrupted, allow user to rescan
+            logging.error(f"Failed to load app cache: {e}")
             QMessageBox.critical(self, "Cache Error",
                                    f"Could not read the cache file: {e}\n\nClick 'Refresh List' to try rebuilding it.")
 
     def scan_and_cache_apps(self):
         self.list_widget.clear()
         self.busy_dialog = BusyDialog(self, self.texts, "Scanning for applications...")
-        self.busy_dialog.open()  # Use open() for non-blocking display
-
-        command = ""
-        if sys.platform == 'win32':
-            win_ver = sys.getwindowsversion()
-            if win_ver.major == 6 and win_ver.minor == 2:
-                logging.info("Running on Windows 8.0, using Get-AppxPackage.")
-                command = """
-                    Get-AppxPackage | ForEach-Object {
-                        $name = $_.Name;
-                        if ($_.InstallLocation -and (Get-AppxPackageManifest $_).Package.Applications.Application.Id) {
-                            $appId = ($_.PackageFamilyName + "!" + (Get-AppxPackageManifest $_).Package.Applications.Application.Id);
-                            $nameBase64 = [System.Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($name));
-                            $idBase64 = [System.Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($appId));
-                            Write-Output "$($nameBase64)`t$($idBase64)";
-                        }
-                    }
-                """
-            else:
-                logging.info("Running on Windows 8.1 or newer, using Get-StartApps.")
-                command = """
-                    Get-StartApps | ForEach-Object {
-                        $name = $_.Name -replace "`t", " ";
-                        $id = $_.AppID;
-                        if ($name -and $id) {
-                            $nameBase64 = [System.Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($name));
-                            $idBase64 = [System.Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($id));
-                            Write-Output "$($nameBase64)`t$($idBase64)"
-                        }
-                    }
-                """
-
-        if not command:
-            logging.warning("UWP scan is only supported on Windows.")
-            QMessageBox.warning(self, "Unsupported OS", "Application scanning is only available on Windows.")
-            self.busy_dialog.close()
-            return
+        self.busy_dialog.open()
 
         self.thread = QThread()
-        self.worker = ScanWorker(command)
+        self.worker = ScanWorker()
         self.worker.moveToThread(self.thread)
 
         self.thread.started.connect(self.worker.run)
@@ -201,13 +125,8 @@ class UWPAppDialog(QDialog):
         self.busy_dialog.close()
 
         if isinstance(result, Exception):
-            logging.error(f"An error occurred during scan: {result}")
-            if isinstance(result, FileNotFoundError):
-                 QMessageBox.critical(self, "Error", "PowerShell not found.")
-            elif isinstance(result, subprocess.CalledProcessError):
-                 QMessageBox.critical(self, "PowerShell Error", f"The scanning script failed to run.\n\nError: {result.stderr}")
-            else:
-                 QMessageBox.critical(self, "Error", f"An unexpected error occurred: {result}")
+            logger.error(f"An error occurred during scan: {result}")
+            QMessageBox.critical(self, "Error", f"An unexpected error occurred during scan: {result}")
             return
 
         try:
@@ -224,10 +143,9 @@ class UWPAppDialog(QDialog):
     def selected_app(self):
         selected_item = self.list_widget.currentItem()
         if selected_item:
-            name = selected_item.text()
-            appid = selected_item.data(Qt.UserRole)
-            return name, appid
-        return None, None
+            app_info_str = selected_item.data(Qt.UserRole)
+            return json.loads(app_info_str)
+        return None
 
 
 # Delegate for selecting a file in the 'path' column
@@ -235,8 +153,6 @@ class PathDelegate(QStyledItemDelegate):
     def __init__(self, parent):
         super().__init__(parent)
     def createEditor(self, parent, option, index):
-        import os
-
         from PyQt5.QtWidgets import QMessageBox
         texts = getattr(parent.parent(), 'texts', None) or getattr(parent, 'texts', None) or {}
         container = QWidget(parent)
@@ -259,23 +175,19 @@ class PathDelegate(QStyledItemDelegate):
                 edit.setText(path)
                 btn.setToolTip(path)
                 btn.setProperty('selected_path', path)
-                finish_edit()  # Immediately finish editing and save
+                finish_edit()
         btn.clicked.connect(choose_file)
 
         def finish_edit():
             path = edit.text().strip()
             if path:
-                if not os.path.isfile(path):
+                if not os.path.exists(path):
                     msg_title = texts.get('file_not_found_title', 'File not found')
                     msg_text = texts.get(
                         'file_not_found_text',
                         'File does not exist or is not accessible:\n{path}\nPlease choose an existing file.'
                     ).replace('{path}', path)
-                    QMessageBox.warning(
-                        container,
-                        msg_title,
-                        msg_text
-                    )
+                    QMessageBox.warning(container, msg_title, msg_text)
                     return
                 btn.setToolTip(path)
                 btn.setProperty('selected_path', path)
@@ -288,52 +200,33 @@ class PathDelegate(QStyledItemDelegate):
         if hasattr(editor, 'edit'):
             editor.edit.setText(value)
             editor.btn.setToolTip(value)
-        elif hasattr(editor, 'btn'):
-            editor.btn.setText(value)
-            editor.btn.setToolTip(value)
         elif isinstance(editor, QLineEdit):
             editor.setText(value)
     def setModelData(self, editor, model, index):
+        path = ""
         if hasattr(editor, 'edit'):
             path = editor.edit.text().strip()
-            model.setData(index, path, 0)
-        elif hasattr(editor, 'btn'):
-            path = editor.btn.property('selected_path')
-            if path:
-                model.setData(index, path, 0)
-            else:
-                btn_text = editor.btn.text()
-                if btn_text:
-                    model.setData(index, btn_text, 0)
         elif isinstance(editor, QLineEdit):
-            model.setData(index, editor.text(), 0)
+            path = editor.text().strip()
+        model.setData(index, path, 0)
 
-# Delegate for arguments
-class ArgsDelegate(QStyledItemDelegate):
-    def __init__(self, parent):
-        super().__init__(parent)
-    def createEditor(self, parent, option, index):
-        return QLineEdit(parent)
-    def setEditorData(self, editor, index):
-        value = index.model().data(index, 0)
-        editor.setText(value)
-    def setModelData(self, editor, model, index):
-        model.setData(index, editor.text(), 0)
 
 class VoiceOpenfilePage(TableSettings):
     def __init__(self, texts, parent=None, settings_manager=None):
-        columns = ["path", "args", "trigger", "is_uwp"]
+        columns = ["trigger", "path", "args", "app_info"]
         self.texts = texts
         super().__init__(parent, settings_manager, settings_key="commands_openfile", columns=columns)
-        self.table.setColumnHidden(self.columns.index("is_uwp"), True)
+        self.table.setColumnHidden(self.columns.index("app_info"), True)
         self.languages = self._get_installed_languages()
         self.init_ui()
+
     def _get_installed_languages(self):
         langs = []
         if self.settings_manager is not None:
             models = self.settings_manager.get('models', {})
             langs = list(models.keys())
         return langs
+
     def init_ui(self):
         texts = self.texts
         main_layout = QVBoxLayout(self)
@@ -350,7 +243,6 @@ class VoiceOpenfilePage(TableSettings):
         lang_layout.addWidget(lang_label)
         lang_layout.addWidget(self.lang_combo)
 
-        # Fuzzy Match Openfile Threshold UI
         fuzzy_label = QLabel(texts.get('fuzzy_match_label', 'Fuzzy match threshold (%)'))
         self.fuzzy_spin = QSpinBox()
         self.fuzzy_spin.setRange(80, 100)
@@ -364,77 +256,84 @@ class VoiceOpenfilePage(TableSettings):
         lang_layout.addStretch()
         main_layout.addLayout(lang_layout)
         main_layout.addWidget(self.table)
+        
         path_col = self.columns.index("path")
-        args_col = self.columns.index("args")
         self.table.setItemDelegateForColumn(path_col, PathDelegate(self.table))
-        self.table.setItemDelegateForColumn(args_col, ArgsDelegate(self.table))
 
         btn_layout = QHBoxLayout()
-        self.add_openfile_btn = QPushButton(texts.get('voice_openfile_add', 'Add Launch'))
-        self.add_uwp_app_btn = QPushButton(texts.get('voice_openfile_add_uwp', 'Select Program'))
+        self.add_manual_btn = QPushButton(texts.get('voice_openfile_add', 'Add Manually'))
+        self.add_app_btn = QPushButton(texts.get('voice_openfile_add_uwp', 'Select Program'))
         self.clear_sel_btn = QPushButton(texts.get('commands_clear_selection', 'Delete selected'))
-        btn_layout.addWidget(self.add_openfile_btn)
-        btn_layout.addWidget(self.add_uwp_app_btn)
+        btn_layout.addWidget(self.add_manual_btn)
+        btn_layout.addWidget(self.add_app_btn)
         btn_layout.addWidget(self.clear_sel_btn)
         btn_layout.addStretch()
         main_layout.addLayout(btn_layout)
 
-        # Check for Windows 8.0
-        is_win8_or_later = False
-        if sys.platform == 'win32':
-            win_ver = sys.getwindowsversion()
-            # Windows 8.0 is version 6.2. Windows 10 is 10.0.
-            if win_ver.major > 6 or (win_ver.major == 6 and win_ver.minor >= 2):
-                is_win8_or_later = True
-
-        if not is_win8_or_later:
-            self.add_uwp_app_btn.hide()
-
-        self.add_openfile_btn.clicked.connect(self.add_openfile_row)
-        self.add_uwp_app_btn.clicked.connect(self.open_uwp_app_dialog)
+        self.add_manual_btn.clicked.connect(self.add_manual_row)
+        self.add_app_btn.clicked.connect(self.open_app_selection_dialog)
         self.clear_sel_btn.clicked.connect(self.clear_selection)
 
         self.lang_combo.currentTextChanged.connect(self._load_commands_for_lang)
         self._load_commands_for_lang(self.lang_combo.currentText())
 
-    def open_uwp_app_dialog(self):
-        dialog = UWPAppDialog(self, texts=self.texts)
+    def open_app_selection_dialog(self):
+        dialog = AppSelectionDialog(self, texts=self.texts)
         if dialog.exec_() == QDialog.Accepted:
-            name, appid = dialog.selected_app()
-            if name and appid:
-                self.add_uwp_app_row(name, appid)
+            app_info = dialog.selected_app()
+            if app_info:
+                self.add_app_row(app_info)
 
-    def add_uwp_app_row(self, name, appid):
+    def add_app_row(self, app_info):
         from PyQt5.QtWidgets import QTableWidgetItem
         row = self.table.rowCount()
         self.table.insertRow(row)
 
-        path_item = QTableWidgetItem("explorer.exe")
-        path_item.setFlags(path_item.flags() & ~Qt.ItemIsEditable)
+        name = app_info.get("name", "Unknown")
+        path = app_info.get("path", "")
+        display_path = name if platform.system() == "Windows" and "appid" in app_info else path
+        app_info_str = json.dumps(app_info)
+
+        trigger_item = QTableWidgetItem(name)
+        path_item = QTableWidgetItem(display_path)
+        path_item.setFlags(path_item.flags() & ~Qt.ItemIsEditable) # Path is read-only for scanned apps
+        args_item = QTableWidgetItem("")
+        app_info_item = QTableWidgetItem(app_info_str)
+
+        self.table.setItem(row, self.columns.index("trigger"), trigger_item)
         self.table.setItem(row, self.columns.index("path"), path_item)
-
-        # The appid from Get-StartApps is the complete identifier.
-        # We just need to prefix it with the shell command.
-        args_text = rf"shell:Appsfolder\{appid}"
-
-        args_item = QTableWidgetItem(args_text)
-        args_item.setFlags(args_item.flags() & ~Qt.ItemIsEditable)
         self.table.setItem(row, self.columns.index("args"), args_item)
+        self.table.setItem(row, self.columns.index("app_info"), app_info_item)
 
-        self.table.setItem(
-            row, self.columns.index("trigger"), QTableWidgetItem(name))
+        self.table.editItem(trigger_item)
 
-        is_uwp_item = QTableWidgetItem("true")
-        is_uwp_item.setFlags(is_uwp_item.flags() & ~Qt.ItemIsEditable)
-        self.table.setItem(row, self.columns.index("is_uwp"), is_uwp_item)
+    def add_manual_row(self):
+        from PyQt5.QtWidgets import QTableWidgetItem
+        row = self.table.rowCount()
+        self.table.insertRow(row)
+        self.table.setItem(row, self.columns.index("trigger"), QTableWidgetItem(""))
+        self.table.setItem(row, self.columns.index("path"), QTableWidgetItem(""))
+        self.table.setItem(row, self.columns.index("args"), QTableWidgetItem(""))
+        self.table.setItem(row, self.columns.index("app_info"), QTableWidgetItem(""))
+        self.table.editItem(self.table.item(row, self.columns.index("path")))
 
-        self.table.editItem(
-            self.table.item(row, self.columns.index("trigger")))
+    def _load_commands_for_lang(self, lang):
+        self.load_table_values(section_key=lang)
+        app_info_col = self.columns.index("app_info")
+        path_col = self.columns.index("path")
+
+        for row in range(self.table.rowCount()):
+            path_item = self.table.item(row, path_col)
+            if path_item:
+                path_item.setToolTip(path_item.text())
+
+            app_info_item = self.table.item(row, app_info_col)
+            if app_info_item and app_info_item.text():
+                if path_item:
+                    path_item.setFlags(path_item.flags() & ~Qt.ItemIsEditable)
 
     def get_settings(self):
-        """Get all settings from this page."""
         lang = self.lang_combo.currentText()
-
         table_data = []
         for row in range(self.table.rowCount()):
             row_data = {}
@@ -443,7 +342,7 @@ class VoiceOpenfilePage(TableSettings):
                 item = self.table.item(row, col_idx)
                 value = item.text().strip() if item else ""
                 row_data[col_name] = value
-                if value:
+                if value and col_name != "app_info":
                     is_row_empty = False
             if not is_row_empty:
                 table_data.append(row_data)
@@ -451,39 +350,7 @@ class VoiceOpenfilePage(TableSettings):
         commands_settings = self.settings_manager.get(self.settings_key, {})
         commands_settings[lang] = table_data
 
-        settings = {
+        return {
             'fuzzy_match_openfile': self.fuzzy_spin.value(),
             self.settings_key: commands_settings,
         }
-        return settings
-
-    def add_openfile_row(self):
-        from PyQt5.QtWidgets import QTableWidgetItem
-        row = self.table.rowCount()
-        self.table.insertRow(row)
-        self.table.setItem(row, 0, QTableWidgetItem(""))  # path
-        self.table.setItem(row, 1, QTableWidgetItem(""))  # args
-        self.table.setItem(row, 2, QTableWidgetItem(""))  # trigger
-        self.table.setItem(row, 3, QTableWidgetItem("false")) # is_uwp
-        self.table.editItem(self.table.item(row, 0))
-
-    def _load_commands_for_lang(self, lang):
-        self.load_table_values(section_key=lang)
-        path_col = self.columns.index("path")
-        args_col = self.columns.index("args")
-        is_uwp_col = self.columns.index("is_uwp")
-
-        for row in range(self.table.rowCount()):
-            # Set tooltip for path
-            path_item = self.table.item(row, path_col)
-            if path_item:
-                path_item.setToolTip(path_item.text())
-
-            # Check if it's a UWP app and disable editing
-            is_uwp_item = self.table.item(row, is_uwp_col)
-            if is_uwp_item and is_uwp_item.text() == "true":
-                if path_item:
-                    path_item.setFlags(path_item.flags() & ~Qt.ItemIsEditable)
-                args_item = self.table.item(row, args_col)
-                if args_item:
-                    args_item.setFlags(args_item.flags() & ~Qt.ItemIsEditable)

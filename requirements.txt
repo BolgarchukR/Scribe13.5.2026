@@ -5,3 +5,4 @@ vosk
 pyqt5
 ruff
 copykitten
+installed-apps-scanner
