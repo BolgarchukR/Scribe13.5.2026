@@ -2,6 +2,12 @@
 import os
 import sys
 
+# Check if running under Wayland and set QT_QPA_PLATFORM accordingly
+if os.environ.get('XDG_SESSION_TYPE') == 'wayland':
+    #os.environ['QT_QPA_PLATFORM'] = 'wayland'
+    print("Not work under Wayland yet.")
+    exit(1)
+
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QApplication
 

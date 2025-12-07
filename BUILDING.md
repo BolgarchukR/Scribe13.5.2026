@@ -7,6 +7,13 @@ These steps will guide you through compiling a working `Scribe.exe` application 
 *   **Python:** Ensure you have Python 3.8 or newer installed. You can download it from the [official website](https://www.python.org/).
 *   **Git:** Required to clone the repository. You can download it from the [official website](https://git-scm.com/).
 
+**For Ubuntu/Debian users:**
+Before installing Python dependencies, ensure you have the necessary system libraries:
+```bash
+sudo apt-get update
+sudo apt-get install -y portaudio19-dev libxcb-xinerama0
+```
+
 ### 2. Clone the Repository
 
 Open a terminal (command prompt) and run the following commands:
@@ -24,6 +31,9 @@ python -m venv venv
 
 # Activate it (for Windows)
 .\venv\Scripts\activate
+
+# Activate it (for Linux/macOS)
+source venv/bin/activate
 ```
 
 ### 4. Install Dependencies
