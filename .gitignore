@@ -40,5 +40,6 @@ screenshots/
 records/
 models/
 cache/
+tests/
 
 test_uwp_scanner.py
