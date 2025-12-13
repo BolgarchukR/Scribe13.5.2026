@@ -23,6 +23,7 @@ Scribe is a versatile tool designed to integrate voice commands and transcriptio
 ### Prerequisites
 
 *   Windows 7 (64-bit) or newer.
+*   Linux support (version 1.2.0 and later) with X11 graphical interface. Wayland is not currently supported.
 
 ### Installation
 
