@@ -3,8 +3,8 @@ import json
 import logging
 import os
 import platform
-import sys
 
+from app_scanner import get_installed_apps
 from PyQt5.QtCore import QObject, Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import (
@@ -27,7 +27,6 @@ from PyQt5.QtWidgets import (
 
 from .busy_dialog import BusyDialog
 from .table_settings import TableSettings
-from app_scanner import get_installed_apps
 
 logger = logging.getLogger(__name__)
 
@@ -256,7 +255,7 @@ class VoiceOpenfilePage(TableSettings):
         lang_layout.addStretch()
         main_layout.addLayout(lang_layout)
         main_layout.addWidget(self.table)
-        
+
         path_col = self.columns.index("path")
         self.table.setItemDelegateForColumn(path_col, PathDelegate(self.table))
 

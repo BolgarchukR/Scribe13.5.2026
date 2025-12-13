@@ -1,6 +1,7 @@
 # hotkey_manager.py
 import logging
 import platform
+
 from pynput import keyboard
 from PyQt5.QtCore import QObject
 
@@ -22,7 +23,7 @@ class HotkeyManager(QObject):
         """Re-registers hotkeys if they have changed in the settings."""
         new_modes = new_settings.get('modes', self.settings_manager.DEFAULTS['modes'])
         new_models_hotkeys = new_settings.get('models_hotkeys', self.settings_manager.DEFAULTS['models_hotkeys'])
-        
+
         last_modes = self._last_registered_hotkeys.get('modes', {})
         last_models_hotkeys = self._last_registered_hotkeys.get('models_hotkeys', {})
 
@@ -34,10 +35,10 @@ class HotkeyManager(QObject):
         """Converts a hotkey string like 'Ctrl+Shift+Q' to pynput format '<ctrl>+<shift>+q'."""
         if not key_str:
             return None
-        
+
         keys = key_str.lower().split('+')
         formatted_keys = []
-        
+
         key_map = {
             'ctrl': 'ctrl',
             'alt': 'alt',
@@ -53,7 +54,7 @@ class HotkeyManager(QObject):
                 formatted_keys.append(f"<{key_map[key]}>")
             else:
                 formatted_keys.append(key)
-        
+
         return "+".join(formatted_keys)
 
     def register_hotkeys(self):
@@ -61,7 +62,7 @@ class HotkeyManager(QObject):
         self.stop()
 
         hotkey_map = {}
-        
+
         # Mode hotkeys
         modes = self.settings_manager.get('modes', {})
         transcribe_hotkey = modes.get('transcribe_mode', 'Ctrl+Shift+Q')
@@ -71,7 +72,7 @@ class HotkeyManager(QObject):
         if pynput_transcribe:
             hotkey_map[pynput_transcribe] = self.controller.switch_to_transcribe_mode
             logger.info(f"Press {transcribe_hotkey} for transcription mode.")
-            
+
         pynput_command = self._to_pynput_format(command_hotkey)
         if pynput_command:
             hotkey_map[pynput_command] = self.controller.switch_to_command_mode
@@ -86,7 +87,7 @@ class HotkeyManager(QObject):
                 name = model.get('name')
                 if name:
                     model_names.add(name)
-        
+
         for model_name in model_names:
             hotkey = models_hotkeys.get(model_name, '')
             if hotkey:
@@ -108,7 +109,7 @@ class HotkeyManager(QObject):
                 if platform.system() == "Linux":
                     logger.error("On Linux, you may need to install 'python3-xlib' and run as root.")
                 self.listener = None
-        
+
         self._last_registered_hotkeys = {
             'modes': modes.copy(),
             'models_hotkeys': models_hotkeys.copy()
@@ -126,11 +127,11 @@ class HotkeyManager(QObject):
                     break
             if model_lang:
                 break
-        
+
         if model_lang is None:
             logger.error(f"Failed to determine language for model {model_name}")
             return
-            
+
         self.settings_manager.set('current_model', model_name)
         self.settings_manager.set('language', model_lang)
 

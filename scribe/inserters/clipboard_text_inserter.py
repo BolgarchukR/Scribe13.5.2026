@@ -3,6 +3,7 @@ import logging
 import queue
 import threading
 import time
+
 import copykitten
 from pynput.keyboard import Controller, Key
 

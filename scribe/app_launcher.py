@@ -1,26 +1,24 @@
 # scribe/app_launcher.py
+import json
 import logging
-import subprocess
+import os
 import platform
 import shlex
-import json
-import os
+import subprocess
 import sys
 
 logger = logging.getLogger(__name__)
 
 class CrossPlatformAppLauncher:
-    """
-    Handles launching applications in a cross-platform manner.
-    """
+    """Handles launching applications in a cross-platform manner."""
 
     def launch(self, app_info_str: str):
-        """
-        Launches an application based on its info dictionary serialized as a JSON string.
+        """Launches an application based on its info dictionary serialized as a JSON string.
+
         :param app_info_str: A JSON string containing application details.
         """
         system = platform.system()
-        
+
         try:
             app_info = json.loads(app_info_str)
         except json.JSONDecodeError:
@@ -43,7 +41,7 @@ class CrossPlatformAppLauncher:
 
                     command = rf"shell:Appsfolder\{appid}"
                     logger.info(f"Launching modern Windows app with command: {command}")
-                    
+
                     win_ver = sys.getwindowsversion()
 
                     # For Win 10/11, explorer.exe is reliable.
@@ -83,7 +81,7 @@ class CrossPlatformAppLauncher:
                     ids_to_try.append(desktop_id)
                 if wm_class and wm_class not in ids_to_try:
                     ids_to_try.append(wm_class)
-                
+
                 if ids_to_try:
                     for app_id in ids_to_try:
                         try:
@@ -92,7 +90,7 @@ class CrossPlatformAppLauncher:
                             subprocess.run(command, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
                             logger.info(f"Successfully launched '{app_name}' using gtk-launch with ID '{app_id}'.")
                             launched_with_id = True
-                            break 
+                            break
                         except FileNotFoundError:
                             logger.warning("gtk-launch not found. Falling back to direct path.")
                             break
@@ -101,7 +99,7 @@ class CrossPlatformAppLauncher:
                             logger.warning(f"gtk-launch failed for ID '{app_id}': {error_message}")
                         except Exception as e:
                             logger.error(f"An unexpected error occurred with gtk-launch for ID '{app_id}': {e}")
-                
+
                 if launched_with_id:
                     return
 
@@ -117,7 +115,7 @@ class CrossPlatformAppLauncher:
         except Exception as e:
             logger.error(f"Failed to launch application '{app_name}'. Error: {e}", exc_info=True)
             raise
-    
+
     def _launch_path(self, path: str, args: str = ""):
         """Launches a standard executable from a path (for Windows and Linux)."""
         logger.info(f"Launching from path: '{path}' with args: '{args}'")

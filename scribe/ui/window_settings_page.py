@@ -1,5 +1,6 @@
 # ui/window_settings_page.py
 import sys
+
 from PyQt5.QtWidgets import QButtonGroup, QCheckBox, QGroupBox, QHBoxLayout, QLabel, QRadioButton, QVBoxLayout, QWidget
 
 from .styles import HINT_LABEL_STYLE

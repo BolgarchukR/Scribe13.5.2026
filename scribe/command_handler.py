@@ -1,10 +1,11 @@
 # command_handler.py
-import logging
 import json
+import logging
+
 from pynput.keyboard import Controller, Key
 
-from scribe.text_utils import fuzzy_match, normalize_text
 from scribe.app_launcher import CrossPlatformAppLauncher
+from scribe.text_utils import fuzzy_match, normalize_text
 
 logger = logging.getLogger(__name__)
 
@@ -24,13 +25,13 @@ def command_mode(settings_manager, lang=None):
                 'enter': Key.enter, 'tab': Key.tab, 'space': Key.space,
                 'backspace': Key.backspace, 'esc': Key.esc
             }
-            
+
             modifiers = [special_keys[k.strip()] for k in keys[:-1] if k.strip() in special_keys]
             regular_key = keys[-1].strip()
 
             for mod in modifiers:
                 keyboard.press(mod)
-            
+
             # Check if the last key is a special key or a regular character
             if regular_key in special_keys:
                 keyboard.press(special_keys[regular_key])
@@ -71,7 +72,7 @@ def command_mode(settings_manager, lang=None):
             app_info_str = cmd.get('app_info', '').strip()
             path = cmd.get('path', '').strip()
             args = cmd.get('args', '').strip()
-            
+
             if trigger and (trigger == text_norm or fuzzy_match(trigger, text_norm, threshold=fuzzy_threshold_openfile)):
                 try:
                     # Prefer launching with rich app_info if available

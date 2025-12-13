@@ -3,6 +3,7 @@ import logging
 import queue
 import threading
 import time
+
 from pynput.keyboard import Controller, Key
 
 from scribe.inserters.text_inserter import TextInserter
