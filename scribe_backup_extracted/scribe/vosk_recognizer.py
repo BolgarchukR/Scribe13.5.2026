@@ -149,17 +149,7 @@ class VoskRecognizer(QObject):
         """Callback for audio input stream. Puts audio data into the queue for recognition. Also calculates RMS and sends it via a signal."""
         if status:
             logger.info(f"Stream status: {status}")
-        # Resample if microphone native rate differs from Vosk required rate
-        if self.need_resample and self.input_sample_rate != self.sample_rate:
-            try:
-                from scribe.audio_utils import AudioUtils
-                audio_data = AudioUtils.resample_audio(bytes(indata), self.input_sample_rate, self.sample_rate)
-            except Exception as e:
-                logger.warning(f"Resampling failed: {e}, using raw audio")
-                audio_data = bytes(indata)
-        else:
-            audio_data = bytes(indata)
-        self.audio_queue.put(audio_data)
+        self.audio_queue.put(bytes(indata))
         # Calculate RMS (signal level)
         try:
             import numpy as np
@@ -167,6 +157,7 @@ class VoskRecognizer(QObject):
             rms = np.sqrt(np.mean(arr.astype(np.float32) ** 2)) / 32768.0
             scaled_rms = min(1.0, rms * 50.0) # Scale for visualization, cap at 1.0
             self.rms_signal.emit(float(scaled_rms))
+            #logger.debug(f"RMS: {rms}, Scaled RMS: {scaled_rms}")
         except Exception:
             pass
 
@@ -215,9 +206,8 @@ class VoskRecognizer(QObject):
                         break
                 if device_index is None:
                     logger.warning(f"[self.id][{recognizer_id}] [WARN] Device with name not found: {self.device_name}, using default")
-            stream_rate = self.input_sample_rate if self.need_resample else self.sample_rate
             self.stream = sd.RawInputStream(
-                samplerate=stream_rate,
+                samplerate=self.sample_rate,
                 blocksize=self.blocksize,
                 dtype='int16',
                 channels=1,
@@ -410,8 +400,6 @@ class VoskRecognizer(QObject):
 
         # If a user final_handler is set, call it
         command_name = ""
-        handled_as_command = False
-        command_action = None
         if self.final_handler:
             res = self.final_handler(final_text_plain)
             if isinstance(res, tuple) and len(res) >= 2:

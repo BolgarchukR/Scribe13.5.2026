@@ -14,11 +14,11 @@ logger = logging.getLogger(__name__)
 DICTATION_MODE_ACTIVE = False
 
 
-def command_mode(settings_manager, lang=None, application=None):
+def command_mode(settings_manager, lang=None):
     """Returns a handler for command mode."""
     launcher = CrossPlatformAppLauncher()
     keyboard = Controller()
-    macro_executor = MacroExecutor(application=application)
+    macro_executor = MacroExecutor()
 
     def send_hotkey(hotkey_str):
         """Parses a hotkey string and sends it via Windows keybd_event API."""
@@ -61,16 +61,14 @@ def command_mode(settings_manager, lang=None, application=None):
                     # Press + release main key
                     macro_executor.press_vk(main_vk)
                     time.sleep(0.05)
-                except Exception as e:
-                    logger.error(f"[COMMAND][ERROR] _fire failed for '{hotkey_str}': {e}")
-                finally:
-                    # Always release keys
                     macro_executor.release_vk(main_vk)
-                    time.sleep(0.02)
+                    time.sleep(0.04)
                     # Release modifiers in reverse
                     for vk in reversed(mod_vks):
                         macro_executor.release_vk(vk)
-                        time.sleep(0.02)
+                        time.sleep(0.03)
+                except Exception as e:
+                    logger.error(f"[COMMAND][ERROR] _fire failed for '{hotkey_str}': {e}")
 
             # Give the voice engine 150ms to finish, then fire in a background thread
             time.sleep(0.15)

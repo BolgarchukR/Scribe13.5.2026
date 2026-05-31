@@ -53,14 +53,6 @@ class Application(QObject):
         self.main_window_was_visible_before_reload = False
         self.settings_window_was_visible_before_reload = False
         self.is_loading_model = False
-        self._pending_reload_path = None
-        self._pending_reload_inserter = None
-
-        # Debounce timer: batches rapid settings changes into a single reload
-        from PyQt5.QtCore import QTimer
-        self._reload_timer = QTimer()
-        self._reload_timer.setSingleShot(True)
-        self._reload_timer.timeout.connect(self._do_pending_reload)
 
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         models_dir = os.path.join(base_dir, "models")
@@ -251,10 +243,7 @@ class Application(QObject):
             else:
                 self.settings_window_was_visible_before_reload = False
 
-            # Debounce: schedule reload in 300ms, cancelling any previous pending reload
-            self._pending_reload_path = new_model_path
-            self._pending_reload_inserter = new_inserter_type
-            self._reload_timer.start(300)
+            self.load_controller_async(new_model_path, new_inserter_type)
         elif new_inserter_type != self.inserter_type and self.controller:
             self.inserter_type = new_inserter_type
             self.controller.set_inserter_type(self.inserter_type)
@@ -264,13 +253,6 @@ class Application(QObject):
 
         if self.controller and hasattr(self.controller.recognizer, '_load_replacements'):
             self.controller.recognizer._load_replacements()
-
-    def _do_pending_reload(self):
-        """Called by debounce timer - performs the actual controller reload."""
-        if self._pending_reload_path:
-            self.load_controller_async(self._pending_reload_path, self._pending_reload_inserter)
-            self._pending_reload_path = None
-            self._pending_reload_inserter = None
 
     def switch_model(self, model_name, lang):
         self.settings_manager.set_many({

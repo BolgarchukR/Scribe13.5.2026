@@ -4,19 +4,6 @@ import platform
 import sys
 
 
-def is_frozen():
-    """Detect if running as PyInstaller bundle (onefile or onedir)."""
-    # Onefile sets both frozen and _MEIPASS
-    if getattr(sys, 'frozen', False) or hasattr(sys, '_MEIPASS'):
-        return True
-    # Onedir: _MEIPASS not set, but _internal folder exists next to executable
-    if hasattr(sys, 'executable'):
-        exe_dir = os.path.dirname(sys.executable)
-        if os.path.exists(os.path.join(exe_dir, '_internal')):
-            return True
-    return False
-
-
 def get_app_data_path(app_name="Scribe"):
     """Get the path to the application data directory for the current OS."""
     system = platform.system()
@@ -43,9 +30,19 @@ def get_models_path():
     - If frozen (PyInstaller), it's a 'models' folder next to the executable.
     - If running from source, it's a 'models' folder in the project root.
     """
-    if is_frozen():
-        base_path = os.path.dirname(sys.executable)
+    if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+        # Path for bundled app
+        if platform.system() == 'Windows':
+            import ctypes
+            # On Windows, use the Win32 API for a Unicode-safe path.
+            buffer = ctypes.create_unicode_buffer(260)  # MAX_PATH
+            ctypes.windll.kernel32.GetModuleFileNameW(None, buffer, 260)
+            base_path = os.path.dirname(buffer.value)
+        else:
+            # Fallback for other systems like Linux or macOS
+            base_path = os.path.dirname(os.path.abspath(sys.executable))
     else:
+        # Path for development (running from source)
         base_path = os.path.abspath(".")
 
     models_path = os.path.join(base_path, 'models')
@@ -84,14 +81,10 @@ def get_specific_model_path(language, model_name):
 
 def resource_path(relative_path):
     """Get absolute path to resource, works for dev and for PyInstaller."""
-    if is_frozen():
-        if hasattr(sys, '_MEIPASS'):
-            # Onefile mode: files extracted to temp folder
-            base_path = sys._MEIPASS
-        else:
-            # Onedir mode: files are in _internal folder next to executable
-            base_path = os.path.join(os.path.dirname(sys.executable), '_internal')
-    else:
-        # Development mode: relative to current working directory
+    try:
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        base_path = sys._MEIPASS
+    except AttributeError:
         base_path = os.path.abspath(".")
+
     return os.path.join(base_path, relative_path)

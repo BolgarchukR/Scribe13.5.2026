@@ -199,7 +199,7 @@ class VoiceTyperController(QObject):
             return
         if self.running:
             self.stop()
-        self.recognizer.set_mode('transcribe', final_handler=command_mode(self.settings_manager, application=self.application))
+        self.recognizer.set_mode('transcribe', final_handler=command_mode(self.settings_manager))
         self.start()
         self.state_changed.emit(self.running, self.recognizer.mode)
 
@@ -214,7 +214,7 @@ class VoiceTyperController(QObject):
             return
         if self.running:
             self.stop()
-        self.recognizer.set_mode('command', final_handler=command_mode(self.settings_manager, application=self.application))
+        self.recognizer.set_mode('command', final_handler=command_mode(self.settings_manager))
         self.start()
         self.state_changed.emit(self.running, self.recognizer.mode)
 
