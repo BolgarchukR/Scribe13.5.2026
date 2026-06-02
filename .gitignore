@@ -12,6 +12,7 @@ venv/
 # Build and distribution artifacts
 build/
 dist/
+backup/
 *.egg-info/
 
 # Editor and IDE settings
