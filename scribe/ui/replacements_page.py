@@ -73,14 +73,17 @@ class ReplacementsPage(TableSettings):
         btn_layout = QHBoxLayout()
         self.add_row_btn = QPushButton(texts.get('replacements_add_rows', 'Add Rows'))
         self.clear_sel_btn = QPushButton(texts.get('replacements_clear_selection', 'Clear Selection'))
+        self.import_btn = QPushButton(texts.get('replacements_import', 'Import Dictionary'))
         btn_layout.addWidget(self.add_row_btn)
         btn_layout.addWidget(self.clear_sel_btn)
+        btn_layout.addWidget(self.import_btn)
         btn_layout.addStretch()
         main_layout.addLayout(btn_layout)
 
         # Connect buttons
         self.add_row_btn.clicked.connect(self.add_row)
         self.clear_sel_btn.clicked.connect(self.clear_selection)
+        self.import_btn.clicked.connect(self.import_dictionary)
 
         # Block of special command buttons for quick insert
         commands = [
@@ -182,3 +185,59 @@ class ReplacementsPage(TableSettings):
             item.setText(text)
         table.setCurrentCell(row, col)
         table.editItem(item)
+
+    def import_dictionary(self):
+        from PyQt5.QtWidgets import QFileDialog, QMessageBox, QTableWidgetItem
+        from scribe.replacements import parse_import_file
+        
+        # Open file dialog
+        options = QFileDialog.Options()
+        filepath, _ = QFileDialog.getOpenFileName(
+            self,
+            self.texts.get('replacements_import_title', 'Import Dictionary'),
+            "",
+            "All Supported Formats (*.json *.txt *.csv *.tsv *.dat *.xml);;JSON Files (*.json);;Text Files (*.txt *.csv *.tsv *.dat *.xml);;All Files (*)",
+            options=options
+        )
+        
+        if not filepath:
+            return
+            
+        imported_items = parse_import_file(filepath)
+        if not imported_items:
+            QMessageBox.warning(
+                self,
+                self.texts.get('replacements_import_error_title', 'Import Error'),
+                self.texts.get('replacements_import_error_body', 'No valid replacements found in the selected file.')
+            )
+            return
+            
+        # Ask append or overwrite
+        confirm_body = self.texts.get('replacements_import_confirm_body', 
+            "Found {count} replacements. Would you like to append them to the current list?\n\n- Click Yes to append them.\n- Click No to overwrite the current list.\n- Click Cancel to abort."
+        ).format(count=len(imported_items))
+        
+        reply = QMessageBox.question(
+            self,
+            self.texts.get('replacements_import_confirm_title', 'Confirm Import'),
+            confirm_body,
+            QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel,
+            QMessageBox.Yes
+        )
+        
+        if reply == QMessageBox.Cancel:
+            return
+            
+        if reply == QMessageBox.No:
+            # Overwrite: clear table first
+            self.table.setRowCount(0)
+            
+        # Add items to the table
+        for item in imported_items:
+            row = self.table.rowCount()
+            self.table.insertRow(row)
+            for col_idx, col_name in enumerate(self.columns):
+                val = item.get(col_name, "")
+                table_item = QTableWidgetItem(val)
+                table_item.setToolTip(val)
+                self.table.setItem(row, col_idx, table_item)

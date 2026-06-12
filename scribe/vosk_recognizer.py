@@ -14,6 +14,7 @@ from PyQt5.QtCore import QObject, pyqtSignal
 
 from scribe.replacements import apply_replacements, apply_replacements_actions, load_replacements
 from scribe.transcribe_file import get_transcribe_file
+from scribe.words_to_numbers import replace_numbers_in_text
 
 logger = logging.getLogger(__name__)
 
@@ -367,46 +368,82 @@ class VoskRecognizer(QObject):
         so that text replaced by special commands is not inserted. Otherwise, uses the clean text directly.
         If a user partial_handler is set, calls it. Otherwise, performs standard transcription behavior.
         """
-        from scribe.replacements import parse_replace_string
-        actions = parse_replace_string(partial)
-        partial_clean = ''.join(act['value'] for act in actions if act['type'] == 'text')
-        # If partial replacements are enabled, apply them to the clean text,
-        # but use apply_replacements_actions to avoid inserting text replaced by special commands
-        if self._partial_replacements_enabled:
-            from scribe.replacements import apply_replacements_actions as ara
-            actions2 = ara(partial_clean, self._replacements)
-            # In partial, insert only those text fragments that do not immediately follow a special command
-            partial = ''.join(act['value'] for act in actions2 if act['type'] == 'text')
+        # Check if the text starts with a "literal print" prefix
+        text_lower = partial.lower().strip()
+        print_prefix = None
+        for prefix in ["напечатай ", "надрукуй "]:
+            if text_lower.startswith(prefix):
+                print_prefix = partial[:len(prefix)]
+                break
+
+        if print_prefix:
+            # Skip replacements and number conversion for the literal part
+            partial_final = partial
         else:
-            partial = partial_clean
+            from scribe.replacements import parse_replace_string
+            actions = parse_replace_string(partial)
+            partial_clean = ''.join(act['value'] for act in actions if act['type'] == 'text')
+            # If partial replacements are enabled, apply them to the clean text,
+            # but use apply_replacements_actions to avoid inserting text replaced by special commands
+            if self._partial_replacements_enabled:
+                from scribe.replacements import apply_replacements_actions as ara
+                actions2 = ara(partial_clean, self._replacements)
+                # Apply numbers conversion to remaining text actions
+                for act in actions2:
+                    if act['type'] == 'text':
+                        act['value'] = replace_numbers_in_text(act['value'])
+                # In partial, insert only those text fragments that do not immediately follow a special command
+                partial_final = ''.join(act['value'] for act in actions2 if act['type'] == 'text')
+            else:
+                partial_final = replace_numbers_in_text(partial_clean)
+
         # If a user partial_handler is set, call it
         if self.partial_handler:
-            self.partial_handler(partial)
+            self.partial_handler(partial_final)
             return
         # Standard behavior (transcription)
         if self.mode == 'transcribe':
             sm = getattr(self, 'settings_manager', None)
             settings = sm.all() if hasattr(sm, 'all') else {}
             if settings.get('show_partial_text', True):
-                self.partial_prev = self._apply_diff(self.partial_prev, partial, "Partial")
-        self.text_recognized.emit(partial, False, "")
+                self.partial_prev = self._apply_diff(self.partial_prev, partial_final, "Partial")
+        self.text_recognized.emit(partial_final, False, "")
 
     def _apply_final(self, final_text: str):
         """Applies replacements to the final text if enabled. Handles writing the final result to file if enabled in settings.
 
         Calls the user final_handler if set. Handles text insertion unless in command mode.
         """
-        actions = None
-        if self._replacements_enabled:
-            actions = apply_replacements_actions(final_text, self._replacements)
-            # For file writing and callback, collect a string without special commands
-            final_text_plain = ''.join(
-                act['value'] if act['type'] == 'text' else '' for act in actions
-            )
+        # Check if the text starts with a "literal print" prefix
+        text_lower = final_text.lower().strip()
+        print_prefix = None
+        for prefix in ["напечатай ", "надрукуй "]:
+            if text_lower.startswith(prefix):
+                print_prefix = final_text[:len(prefix)]
+                break
+
+        if print_prefix:
+            # Skip replacements and number conversion for the literal part
+            literal_part = final_text[len(print_prefix):]
+            final_text_plain = print_prefix + literal_part
             diff_text = final_text_plain
+            actions = None
         else:
-            final_text_plain = final_text
-            diff_text = final_text
+            actions = None
+            if self._replacements_enabled:
+                actions = apply_replacements_actions(final_text, self._replacements)
+                # Post-process remaining text segments with words-to-numbers conversion
+                for act in actions:
+                    if act['type'] == 'text':
+                        act['value'] = replace_numbers_in_text(act['value'])
+                # For file writing and callback, collect a string without special commands
+                final_text_plain = ''.join(
+                    act['value'] if act['type'] == 'text' else '' for act in actions
+                )
+                diff_text = final_text_plain
+            else:
+                final_text_plain = replace_numbers_in_text(final_text)
+                diff_text = final_text_plain
 
         # If a user final_handler is set, call it
         command_name = ""

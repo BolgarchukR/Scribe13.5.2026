@@ -208,5 +208,11 @@
     "theme_settings_group": "Тема оформления",
     "theme_light": "Светлая",
     "theme_dark": "Темная",
-    "theme_auto": "Авто (системная)"
+    "theme_auto": "Авто (системная)",
+    "replacements_import": "Импорт словаря",
+    "replacements_import_title": "Импорт словаря замен",
+    "replacements_import_confirm_title": "Подтверждение импорта",
+    "replacements_import_confirm_body": "Найдено {count} замен. Хотите добавить их к текущему списку?\n\n- Нажмите 'Да', чтобы добавить их.\n- Нажмите 'Нет', чтобы очистить текущий список и записать новые.\n- Нажмите 'Отмена' для отмены операции.",
+    "replacements_import_error_title": "Ошибка импорта",
+    "replacements_import_error_body": "Не найдено корректных правил замен в выбранном файле."
 }

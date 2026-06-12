@@ -209,5 +209,11 @@
     "theme_settings_group": "Theme",
     "theme_light": "Light",
     "theme_dark": "Dark",
-    "theme_auto": "Auto (System)"
+    "theme_auto": "Auto (System)",
+    "replacements_import": "Import Dictionary",
+    "replacements_import_title": "Import Replacement Dictionary",
+    "replacements_import_confirm_title": "Confirm Import",
+    "replacements_import_confirm_body": "Found {count} replacements. Would you like to append them to the current list?\n\n- Click Yes to append them.\n- Click No to overwrite the current list.\n- Click Cancel to abort.",
+    "replacements_import_error_title": "Import Error",
+    "replacements_import_error_body": "No valid replacements found in the selected file."
 }
