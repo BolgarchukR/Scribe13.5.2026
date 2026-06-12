@@ -101,7 +101,7 @@ class MacroExecutor:
 
     def execute(self, macro_actions):
         """Executes a list of macro actions sequentially."""
-        logger.info(f"[MACRO WINAPI] Executing macro with {len(macro_actions)} actions")
+        logger.debug(f"[ACTION] Macro execution started ({len(macro_actions)} actions)")
         for idx, action in enumerate(macro_actions):
             try:
                 self._abort_check()
@@ -115,10 +115,10 @@ class MacroExecutor:
 
     def _execute_action(self, action):
         t = action.get('type')
-        logger.debug(f"[MACRO WINAPI] -> {action}")
         
         if t in ['key_down', 'key_up', 'key_press']:
             k_str = action.get('key', '')
+            logger.info(f"[ACTION] {k_str}")
             vk = self.resolve_vk(k_str)
             if vk is None and len(k_str) == 1:
                 scan = ctypes.windll.user32.VkKeyScanW(ord(k_str))
@@ -141,7 +141,10 @@ class MacroExecutor:
             
             if isinstance(raw_keys, str):
                 raw_keys = [raw_keys]
+            
+            logger.info(f"[ACTION] {'+'.join(raw_keys)}")
                 
+            # ... rest of hotkey logic stays same ...
             keys = []
             for k in raw_keys:
                 if '+' in k:
@@ -180,29 +183,28 @@ class MacroExecutor:
                 
         elif t == 'delay':
             ms = int(action.get('ms', 0))
+            logger.info(f"[ACTION] Delay: {ms}ms")
             if ms > 0:
                 self._sleep_with_abort(ms / 1000.0)
                 
         elif t == 'run_app':
             path = action.get('path', '')
             args = action.get('args', '')
+            logger.info(f"[ACTION] {path} {args}")
             payload = json.dumps({"path": path, "args": args})
             self.launcher.launch(payload)
             
         elif t == 'type_text':
             text = action.get('text', '')
+            logger.info(f"[ACTION] {text}")
             self.keyboard_text.type(text)
 
         elif t == 'javascript':
-            # Execute JS in browser via Bookmarklet method:
-            # 1. Focus address bar (Alt+D)
-            # 2. Type "javascript:" + code
-            # 3. Press Enter
             code = action.get('code', '')
+            logger.info(f"[ACTION] Browser JS: {code[:30]}...")
             if not code.startswith('javascript:'):
                 code = 'javascript:' + code
             
-            # Focus URL bar (Alt+D)
             self.press_vk(VK['alt'])
             time.sleep(0.05)
             self.press_vk(0x44) # 'D'
@@ -211,27 +213,23 @@ class MacroExecutor:
             self.release_vk(VK['alt'])
             time.sleep(0.2) # Wait for browser focus
             
-            # Type code
             self.keyboard_text.type(code)
             time.sleep(0.1)
             
-            # Press Enter
             self.press_vk(VK['enter'])
             time.sleep(0.05)
             self.release_vk(VK['enter'])
 
         elif t == 'scribe_action':
             action_name = action.get('action', '')
+            logger.info(f"[ACTION] Scribe: {action_name}")
             if self._application and hasattr(self._application, 'controller') and self._application.controller:
                 ctrl = self._application.controller
                 if action_name == 'toggle_transcription':
-                    logger.info("[MACRO] Scribe action: toggle_transcription")
                     ctrl.switch_to_transcribe_mode()
                 elif action_name == 'toggle_command':
-                    logger.info("[MACRO] Scribe action: toggle_command")
                     ctrl.switch_to_command_mode()
                 elif action_name == 'stop_all':
-                    logger.info("[MACRO] Scribe action: stop_all")
                     ctrl.stop()
                 else:
                     logger.warning(f"[MACRO] Unknown scribe_action: {action_name}")

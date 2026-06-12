@@ -209,5 +209,11 @@
     "theme_settings_group": "Тема",
     "theme_light": "Світла",
     "theme_dark": "Темна",
-    "theme_auto": "Автоматична (системна)"
+    "theme_auto": "Автоматична (системна)",
+    "replacements_import": "Імпорт словника",
+    "replacements_import_title": "Імпорт словника замін",
+    "replacements_import_confirm_title": "Підтвердження імпорту",
+    "replacements_import_confirm_body": "Знайдено {count} замін. Бажаєте додати їх до поточного списку?\n\n- Натисніть 'Так', щоб додати їх.\n- Натисніть 'Ні', щоб очистити поточний список і записать нові.\n- Натисніть 'Скасувати' для скасування операції.",
+    "replacements_import_error_title": "Помилка імпорту",
+    "replacements_import_error_body": "Не знайдено коректних правил замін у вибраному файлі."
 }

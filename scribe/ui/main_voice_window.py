@@ -77,7 +77,9 @@ class MainVoiceWindow(QWidget):
         main_window_settings = settings.get('main_window', {})
         size_mode = main_window_settings.get('size_mode', 'large')
         self.show_waveform = main_window_settings.get('show_waveform', True)
-        if size_mode == 'small':
+        if size_mode == 'micro':
+            self.scale = 0.35
+        elif size_mode == 'small':
             self.scale = 0.5
         elif size_mode == 'medium':
             self.scale = 0.75
@@ -182,7 +184,9 @@ class MainVoiceWindow(QWidget):
 
         # Check if the size mode has changed
         size_mode = main_window_settings.get('size_mode', 'large')
-        if size_mode == 'small':
+        if size_mode == 'micro':
+            new_scale = 0.35
+        elif size_mode == 'small':
             new_scale = 0.5
         elif size_mode == 'medium':
             new_scale = 0.75

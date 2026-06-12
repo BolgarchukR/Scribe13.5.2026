@@ -12,6 +12,7 @@ from .input_settings_page import InputSettingsPageWidget
 from .main_settings_page import MainSettingsPageWidget
 from .replacements_page import ReplacementsPage
 from .vosk_models_page import VoskModelsPageWidget
+from .console_page import ConsolePageWidget
 
 
 class SettingsWindow(QDialog):
@@ -53,6 +54,7 @@ class SettingsWindow(QDialog):
         from .window_settings_page import WindowSettingsPageWidget
         self.window_settings_page = WindowSettingsPageWidget(self.texts, self.settings_manager)
         self.vosk_models_page = VoskModelsPageWidget(self.settings_manager, self.texts)
+        self.console_page = ConsolePageWidget(self.texts, self.settings_manager)
 
         # Map pages to their help anchors
         self.help_map = {
@@ -62,6 +64,7 @@ class SettingsWindow(QDialog):
             self.replacements_page: "08_settings_replacements",
             self.vosk_models_page: "11_settings_vosk_models",
             self.window_settings_page: "12_settings_main_window",
+            self.console_page: "13_console",
         }
 
         self.add_category(self.texts.get('settings_hotkeys', 'Hotkeys'), self.hotkeys_page)
@@ -70,6 +73,7 @@ class SettingsWindow(QDialog):
         self.add_category(self.texts.get('settings_replacements', 'Replacements'), self.replacements_page)
         self.add_category(self.texts.get('settings_models', 'Vosk Models'), self.vosk_models_page)
         self.add_category(self.texts.get('settings_main_window', 'Main Window'), self.window_settings_page)
+        self.add_category(self.texts.get('settings_console', 'Event Log'), self.console_page)
 
         self.category_list.currentRowChanged.connect(self.on_category_changed)
 

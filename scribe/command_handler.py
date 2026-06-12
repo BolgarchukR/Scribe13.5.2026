@@ -75,7 +75,7 @@ def command_mode(settings_manager, lang=None, application=None):
             # Give the voice engine 150ms to finish, then fire in a background thread
             time.sleep(0.15)
             threading.Thread(target=_fire, daemon=True).start()
-            logger.info(f"[COMMAND] Sending hotkey via WinAPI: {hotkey_str}")
+            logger.info(f"[ACTION] Sending hotkey via WinAPI: {hotkey_str}")
         except Exception as e:
             logger.error(f"[COMMAND][ERROR] Failed to send hotkey '{hotkey_str}': {e}")
 
@@ -85,17 +85,17 @@ def command_mode(settings_manager, lang=None, application=None):
         settings = settings_manager.all() if hasattr(settings_manager, 'all') else {}
         lang_code = lang or settings.get('language', 'en')
         text_norm = normalize_text(text)
-        logger.info(f"[COMMAND] Recognized text: '{text_norm}'")
+        logger.info(f"[SPEECH] Recognized: '{text_norm}'")
 
         if text_norm in ["включить диктовку", "включи диктовку"]:
             DICTATION_MODE_ACTIVE = True
             if hasattr(settings_manager, 'set'): settings_manager.set('dictation_mode_active', True)
-            logger.info("Dictation mode ON")
+            logger.info("[COMMAND] Hit: Dictation Mode ON")
             return (lambda: None, "Dictation Mode ON")
         elif text_norm in ["выключить диктовку", "выключи диктовку"]:
             DICTATION_MODE_ACTIVE = False
             if hasattr(settings_manager, 'set'): settings_manager.set('dictation_mode_active', False)
-            logger.info("Dictation mode OFF")
+            logger.info("[COMMAND] Hit: Dictation Mode OFF")
             return (lambda: None, "Dictation Mode OFF")
 
         if hasattr(settings_manager, 'get'):
@@ -119,7 +119,9 @@ def command_mode(settings_manager, lang=None, application=None):
                     is_isolated = len(text_norm.split()) <= len(trigger.split()) + 1
                     if trigger == text_norm or (is_isolated and fuzzy_match(trigger, text_norm, threshold=fuzzy_threshold_hotkey)):
                         if hotkey:
+                            logger.info(f"[COMMAND] Hit: {trigger_str} | Param: {hotkey}")
                             return (lambda h=hotkey: send_hotkey(h), trigger_str)
+                        logger.info(f"[COMMAND] Hit: {trigger_str} | Param: Action")
                         return (True, trigger_str)
 
         # 2. Check commands_openfile
@@ -139,10 +141,13 @@ def command_mode(settings_manager, lang=None, application=None):
                         if app_info_str:
                             app_info = json.loads(app_info_str)
                             app_info['args'] = args
+                            logger.info(f"[COMMAND] Hit: {trigger_str} | Param: {app_info.get('name', path)}")
                             return (lambda info=json.dumps(app_info), t=trigger: _safe_launch(launcher, info, t), trigger_str)
                         elif path:
                             minimal_info = json.dumps({"path": path, "name": trigger, "args": args})
+                            logger.info(f"[COMMAND] Hit: {trigger_str} | Param: {path}")
                             return (lambda info=minimal_info, t=trigger: _safe_launch(launcher, info, t), trigger_str)
+                        logger.info(f"[COMMAND] Hit: {trigger_str} | Param: Launch")
                         return (True, trigger_str)
 
         # 3. Check commands_macro
@@ -158,6 +163,7 @@ def command_mode(settings_manager, lang=None, application=None):
                 if trigger:
                     is_isolated = len(text_norm.split()) <= len(trigger.split()) + 1
                     if trigger == text_norm or (is_isolated and fuzzy_match(trigger, text_norm, threshold=fuzzy_threshold_macro)):
+                        logger.info(f"[COMMAND] Hit: {trigger_str} | Param: Macro ({len(actions)})")
                         return (lambda acts=actions: macro_executor.execute(acts), trigger_str)
 
         return False

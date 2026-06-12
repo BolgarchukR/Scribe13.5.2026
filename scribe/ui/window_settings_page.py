@@ -67,19 +67,24 @@ class WindowSettingsPageWidget(QWidget):
         self.size_group = QGroupBox(self.texts.get('window_size_group', 'Window size'))
         size_layout = QHBoxLayout(self.size_group)
         self.size_btn_group = QButtonGroup(self)
+        self.size_micro_radio = QRadioButton(self.texts.get('window_size_micro', 'Micro'))
         self.size_small_radio = QRadioButton(self.texts.get('window_size_small', 'Small'))
         self.size_medium_radio = QRadioButton(self.texts.get('window_size_medium', 'Medium'))
         self.size_large_radio = QRadioButton(self.texts.get('window_size_large', 'Large'))
         size_layout.addWidget(QLabel(self.texts.get('window_size_label', 'Size:')))
+        size_layout.addWidget(self.size_micro_radio)
         size_layout.addWidget(self.size_small_radio)
         size_layout.addWidget(self.size_medium_radio)
         size_layout.addWidget(self.size_large_radio)
-        self.size_btn_group.addButton(self.size_small_radio, 0)
-        self.size_btn_group.addButton(self.size_medium_radio, 1)
-        self.size_btn_group.addButton(self.size_large_radio, 2)
+        self.size_btn_group.addButton(self.size_micro_radio, 0)
+        self.size_btn_group.addButton(self.size_small_radio, 1)
+        self.size_btn_group.addButton(self.size_medium_radio, 2)
+        self.size_btn_group.addButton(self.size_large_radio, 3)
         # Determine the selected size from the settings
         size_value = self.main_window_settings.get('size_mode', 'medium')
-        if size_value == 'small':
+        if size_value == 'micro':
+            self.size_micro_radio.setChecked(True)
+        elif size_value == 'small':
             self.size_small_radio.setChecked(True)
         elif size_value == 'medium':
             self.size_medium_radio.setChecked(True)
@@ -123,8 +128,17 @@ class WindowSettingsPageWidget(QWidget):
         self.open_on_tray_click_checkbox.stateChanged.connect(self._on_open_on_tray_click_changed)
         layout.addWidget(self.open_on_tray_click_checkbox)
 
+        # Auto-start transcription
+        self.auto_start_transcription_checkbox = QCheckBox(self.texts.get('auto_start_transcription', 'Транскрипция автозапуск'))
+        self.auto_start_transcription_checkbox.setChecked(self.main_window_settings.get('auto_start_transcription', False))
+        self.auto_start_transcription_checkbox.stateChanged.connect(self._on_auto_start_transcription_changed)
+        layout.addWidget(self.auto_start_transcription_checkbox)
+
         layout.addStretch()
 
+    def _on_auto_start_transcription_changed(self, state):
+        self.main_window_settings['auto_start_transcription'] = bool(state)
+        self.settings_manager.set('main_window', self.main_window_settings)
 
     def _on_open_on_tray_click_changed(self, state):
         self.main_window_settings['open_on_tray_click'] = bool(state)
@@ -168,7 +182,9 @@ class WindowSettingsPageWidget(QWidget):
         self.settings_manager.set('main_window', self.main_window_settings)
 
     def _on_size_mode_changed(self, btn):
-        if self.size_small_radio.isChecked():
+        if self.size_micro_radio.isChecked():
+            val = 'micro'
+        elif self.size_small_radio.isChecked():
             val = 'small'
         elif self.size_medium_radio.isChecked():
             val = 'medium'

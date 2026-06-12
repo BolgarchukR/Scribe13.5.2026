@@ -14,9 +14,16 @@ from scribe.tray_app import TrayApp
 from scribe.ui.busy_dialog import BusyDialog
 from scribe.ui.main_voice_window import MainVoiceWindow
 from scribe.ui.settings_window import SettingsWindow
+from scribe.log_handler import log_signaler, QtSignalingHandler
 from scribe.utils import get_specific_model_path
+from scribe.logging_config import setup_logging
 
 logger = logging.getLogger(__name__)
+
+def initialize_ui_logging():
+    """Attaches the signaling handler to the root logger."""
+    handler = QtSignalingHandler(log_signaler)
+    logging.getLogger().addHandler(handler)
 
 
 class Application(QObject):
@@ -29,6 +36,7 @@ class Application(QObject):
 
     def __init__(self, settings_manager, settings, ui_lang, texts, recognition_language, model_path):
         super().__init__()
+        initialize_ui_logging()
         self.app = QApplication.instance() or QApplication(sys.argv)
         self.app.setQuitOnLastWindowClosed(False)
         self.app.aboutToQuit.connect(self._on_about_to_quit)
@@ -200,8 +208,15 @@ class Application(QObject):
         if not self.initial_load_complete:
             # This was the initial startup load
             self.initial_load_complete = True
-            if self.settings.get('main_window', {}).get('show_on_startup', True):
+            main_window_cfg = self.settings.get('main_window', {})
+            if main_window_cfg.get('show_on_startup', True):
                 self.show_main_window()
+            
+            # Start transcription automatically if enabled in Main Window settings
+            if main_window_cfg.get('auto_start_transcription', False):
+                logger.info("Auto-start transcription is enabled, starting controller.")
+                if self.controller and hasattr(self.controller, 'switch_to_transcribe_mode'):
+                    self.controller.switch_to_transcribe_mode()
         else:
             # This was a subsequent model change
             if self.main_window_was_visible_before_reload:
